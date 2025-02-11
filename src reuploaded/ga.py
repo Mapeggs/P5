@@ -115,9 +115,9 @@ class Individual_Grid(object):
         g = [random.choices(options, k=width) for row in range(height)]
         g[15][:] = ["X"] * width
         g[14][0] = "m"
-        g[7][-1] = "v"
-        g[8:14][-1] = ["f"] * 6
-        g[14:16][-1] = ["X", "X"]
+        g[7][-2] = "v"
+        g[8:14][-2] = ["f"] * 6
+        g[14:16][-2] = ["X", "X"]
         return cls(g)
 
 
@@ -347,6 +347,24 @@ def generate_successors(population):
     results = []
     # STUDENT Design and implement this
     # Hint: Call generate_children() on some individuals and fill up results.
+
+    # Generate children from the top individuals
+    num_parents = len(population) // 2
+    for i in range(num_parents):
+        parent1 = population[i]
+        parent2 = population[num_parents + i]
+        children = parent1.generate_children(parent2)
+        results.extend(children)
+    
+    # Ensure the results length is equal to the population length
+    while len(results) < len(population):
+        parent1 = random.choice(population[:num_parents])
+        parent2 = random.choice(population[:num_parents])
+        children = parent1.generate_children(parent2)
+        results.extend(children)
+    
+    results = results[:len(population)]
+
     return results
 
 
@@ -384,7 +402,7 @@ def ga():
                     print("Max fitness:", str(best.fitness()))
                     print("Average generation time:", (now - start) / generation)
                     print("Net time:", now - start)
-                    with open("levels/last.txt", 'w') as f:
+                    with open("levels/last.txt", 'w+') as f:
                         for row in best.to_level():
                             f.write("".join(row) + "\n")
                 generation += 1
