@@ -79,22 +79,44 @@ class Individual_Grid(object):
                 elif (current_tile == "B" or current_tile == "M" or current_tile == "?") and random.random() < 0.2:
                     genome[y][x] = random.choices(["B", "?", "M"], weights=[0.7, 0.2, 0.1])[0]
                 # 1% chance to add a coin or enemy above a blocks
-                elif current_tile == "-" and random.random() < 0.01:
+                elif current_tile == "-" and random.random() < 0.03:
                     if y + 1 < height and (genome[y + 1][x] == "B" or genome[y + 1][x] == "X"):
                         genome[y][x] = random.choices(["o", "E"], weights=[0.7, 0.3])[0]
                 # 1% chance to remove a coin or enemy
                 elif (current_tile == "o" or current_tile == "E") and random.random() < 0.01:
                     genome[y][x] = "-"
-                # 1% chance to mutate an empty space above height 4 to a breakable block
+                # 1% chance to mutate an empty space above height 4 and empty space 2 tiles below to a breakable block
                 elif (current_tile == "-" and
                     random.random() < (0.01 - (0.01 * (height - y) / height)) and 
                     height - y > 4 and
-                    all(genome[y + 1][dx] == "-" for dx in range(x - 1, x + 1))):
+                    all(genome[dy][x] == "-" for dy in range(y+1, y+2)) and
+                    all(genome[dy][x+1] == "-" for dy in range(y+1, y+2)) and
+                    all(genome[dy][x-1] == "-" for dy in range(y+1, y+2))):
+
+                    genome[y][x] = "B"
+
+                elif (current_tile == "-" and
+                    random.random() < 0.01 and 
+                    (genome[y][x+1] == "B" or genome[y][x-1] == "B") and
+                    all(genome[dy][x] == "-" for dy in range(y+1, y+2)) and
+                    all(genome[dy][x+1] == "-" for dy in range(y+1, y+2)) and
+                    all(genome[dy][x-1] == "-" for dy in range(y+1, y+2))):
 
                     genome[y][x] = "B"
                 # 1% chance (increasing to 5% with height) to mutate an remove breakable block
                 if current_tile == "B" and random.random() < (0.01 + (0.04 * (height - y) / height)):
                     genome[y][x] = "-"
+
+                # 1% chance to change X to empty space if there is nothing above
+                elif current_tile == "X" and genome[y - 1][x] == "-" and random.random() < 0.02:
+                    genome[y][x] = "-"
+                    if (random.random() < 0.25 and
+                        genome[y][x-1] == "X" and
+                        genome[y][x+1] == "X" and
+                        x-1 > 0 and
+                        x+1 < width - 1):
+                        genome[y][x-1] = "-"
+                        genome[y][x+1] = "-"
 
         return genome
 
@@ -113,6 +135,7 @@ class Individual_Grid(object):
 
                 # 5% chance to add a pipe
                 if height - y < threshold and random.random() < 0.05:
+                    # take highest fitness pipe
                     if (self.genome[y][x] == "T" and
                         self.fitness() < other.fitness() and
                         all(new_genome[dy][x] == "-" for dy in range(y+2, height - 1)) and
@@ -125,6 +148,7 @@ class Individual_Grid(object):
                         for dy in range(y+1, height - 1):
                             new_genome[dy][x] = "|"  
 
+                    # take highest fitness pipe
                     elif (other.genome[y][x] == "T" and
                         other.fitness() < self.fitness() and
                         all(new_genome[dy][x] == "-" for dy in range(y+2, height - 1)) and
@@ -137,6 +161,7 @@ class Individual_Grid(object):
                         for dy in range(y+1, height - 1):
                             new_genome[dy][x] = "|"  
 
+                # if equal to threshold hight and a parent has a brick, add a brick 
                 if height - y == threshold and (self.genome[y][x] == "B" or other.genome[y][x] == "B"):
                     count_B = sum(1 for row in new_genome if row[x] == "B")
                     # 15% have brick on tile, but less likely as number of bricks increases
@@ -144,11 +169,16 @@ class Individual_Grid(object):
                         new_genome[y][x] = "B"
                         if random.random() < 0.3:  # 30% chance to place another block
                             offset_x = random.choice([-1, 1])  # left, or right
-                            offset_y = random.randint(2, 4)  # between 2 and 4 blocks higher
+                            offset_y = random.randint(3, 5)  # between 3 and 5 blocks higher
                             new_x = clip(left, x + offset_x, right - 1)
                             new_y = clip(0, y - offset_y, height - 1)
                             if new_genome[new_y][new_x] == "-":
                                 new_genome[new_y][new_x] = "B"
+                        elif random.random() < 0.3:  # 30% chance to place block to either side
+                            offset_x = random.choice([-1, 1])  # left, or right
+                            new_x = clip(left, x + offset_x, right - 1)
+                            if new_genome[y][new_x] == "-":
+                                new_genome[y][new_x] = "B"
 
                 # don't change the forbidden tiles
                 if self.genome[y][x] == "v" or self.genome[y][x] == "f" or self.genome[y][x] == "m":
@@ -419,11 +449,22 @@ def generate_successors(population):
 
     # Generate children from the top individuals
     num_parents = len(population) // 2
-    for i in range(num_parents):
+    for i in range(num_parents - int(num_parents * 0.1)):
         parent1 = population[i]
         parent2 = population[num_parents + i]
         children = parent1.generate_children(parent2)
         results.extend(children)
+
+    # Roulette wheel selection
+    total_fitness = sum(ind.fitness() for ind in population)
+    if total_fitness > 0:
+        selection_probs = [ind.fitness() / total_fitness for ind in population]
+        selected_indices = random.choices(range(len(population)), weights=selection_probs, k=len(population) - len(results))
+        for i in selected_indices:
+            parent1 = population[i]
+            parent2 = random.choice(population)
+            children = parent1.generate_children(parent2)
+            results.extend(children)
     
     # Ensure the results length is equal to the population length
     while len(results) < len(population):
