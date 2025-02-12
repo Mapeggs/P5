@@ -72,7 +72,30 @@ class Individual_Grid(object):
         right = width - 1
         for y in range(height):
             for x in range(left, right):
-                pass
+                current_tile = genome[y][x]
+                if current_tile == "T" or current_tile == "|" or current_tile == "f" or current_tile == "v" or current_tile == "m":
+                    continue  # Skip mutation for forbidden tiles
+                # 20% chance to change a block types
+                elif (current_tile == "B" or current_tile == "M" or current_tile == "?") and random.random() < 0.2:
+                    genome[y][x] = random.choices(["B", "?", "M"], weights=[0.7, 0.2, 0.1])[0]
+                # 1% chance to add a coin or enemy above a blocks
+                elif current_tile == "-" and random.random() < 0.01:
+                    if y + 1 < height and (genome[y + 1][x] == "B" or genome[y + 1][x] == "X"):
+                        genome[y][x] = random.choices(["o", "E"], weights=[0.7, 0.3])[0]
+                # 1% chance to remove a coin or enemy
+                elif (current_tile == "o" or current_tile == "E") and random.random() < 0.01:
+                    genome[y][x] = "-"
+                # 1% chance to mutate an empty space above height 4 to a breakable block
+                elif (current_tile == "-" and
+                    random.random() < (0.01 - (0.01 * (height - y) / height)) and 
+                    height - y > 4 and
+                    all(genome[y + 1][dx] == "-" for dx in range(x - 1, x + 1))):
+
+                    genome[y][x] = "B"
+                # 1% chance (increasing to 5% with height) to mutate an remove breakable block
+                if current_tile == "B" and random.random() < (0.01 + (0.04 * (height - y) / height)):
+                    genome[y][x] = "-"
+
         return genome
 
     # Create zero or more children from self and other
@@ -82,11 +105,57 @@ class Individual_Grid(object):
         # do crossover with other
         left = 1
         right = width - 1
-        for y in range(height):
+        for y in range(height - 1, 0, -1):
             for x in range(left, right):
                 # STUDENT Which one should you take?  Self, or other?  Why?
                 # STUDENT consider putting more constraints on this to prevent pipes in the air, etc
-                pass
+                threshold = 5
+
+                # 5% chance to add a pipe
+                if height - y < threshold and random.random() < 0.05:
+                    if (self.genome[y][x] == "T" and
+                        self.fitness() < other.fitness() and
+                        all(new_genome[dy][x] == "-" for dy in range(y+2, height - 1)) and
+                        all(new_genome[dy][x + 1] == "-" for dy in range(y+2, height - 1)) and
+                        all(new_genome[dy][x - 1] == "-" for dy in range(y+2, height - 1)) and
+                        sum(row.count("T") for row in new_genome) < 10):
+
+                        # add whole pipe
+                        new_genome[y][x] = "T"
+                        for dy in range(y+1, height - 1):
+                            new_genome[dy][x] = "|"  
+
+                    elif (other.genome[y][x] == "T" and
+                        other.fitness() < self.fitness() and
+                        all(new_genome[dy][x] == "-" for dy in range(y+2, height - 1)) and
+                        all(new_genome[dy][x + 1] == "-" for dy in range(y+2, height - 1)) and
+                        all(new_genome[dy][x - 1] == "-" for dy in range(y+2, height - 1)) and
+                        sum(row.count("T") for row in new_genome) < 10):
+
+                        # add whole pipe
+                        new_genome[y][x] = "T"
+                        for dy in range(y+1, height - 1):
+                            new_genome[dy][x] = "|"  
+
+                if height - y == threshold and (self.genome[y][x] == "B" or other.genome[y][x] == "B"):
+                    count_B = sum(1 for row in new_genome if row[x] == "B")
+                    # 15% have brick on tile, but less likely as number of bricks increases
+                    if random.random() < 0.15 - (0.15 * (2 * count_B / width)):
+                        new_genome[y][x] = "B"
+                        if random.random() < 0.3:  # 30% chance to place another block
+                            offset_x = random.choice([-1, 1])  # left, or right
+                            offset_y = random.randint(2, 4)  # between 2 and 4 blocks higher
+                            new_x = clip(left, x + offset_x, right - 1)
+                            new_y = clip(0, y - offset_y, height - 1)
+                            if new_genome[new_y][new_x] == "-":
+                                new_genome[new_y][new_x] = "B"
+
+                # don't change the forbidden tiles
+                if self.genome[y][x] == "v" or self.genome[y][x] == "f" or self.genome[y][x] == "m":
+                    new_genome[y][x] = self.genome[y][x]
+                    
+        new_genome = self.mutate(new_genome)
+
         # do mutation; note we're returning a one-element tuple here
         return (Individual_Grid(new_genome),)
 
@@ -101,11 +170,11 @@ class Individual_Grid(object):
         g = [["-" for col in range(width)] for row in range(height)]
         g[15][:] = ["X"] * width
         g[14][0] = "m"
-        g[7][-1] = "v"
+        g[7][-2] = "v"
         for col in range(8, 14):
-            g[col][-1] = "f"
+            g[col][-2] = "f"
         for col in range(14, 16):
-            g[col][-1] = "X"
+            g[col][-2] = "X"
         return cls(g)
 
     @classmethod
@@ -407,7 +476,7 @@ def ga():
                             f.write("".join(row) + "\n")
                 generation += 1
                 # STUDENT Determine stopping condition
-                stop_condition = False
+                stop_condition = generation > 6
                 if stop_condition:
                     break
                 # STUDENT Also consider using FI-2POP as in the Sorenson & Pasquier paper
