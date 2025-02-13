@@ -67,6 +67,7 @@ class Individual_Grid(object):
         # STUDENT implement a mutation operator, also consider not mutating this individual
         # STUDENT also consider weighting the different tile types so it's not uniformly random
         # STUDENT consider putting more constraints on this to prevent pipes in the air, etc
+        mutation_rate = 1.0
 
         left = 1
         right = width - 1
@@ -76,18 +77,19 @@ class Individual_Grid(object):
                 if current_tile == "T" or current_tile == "|" or current_tile == "f" or current_tile == "v" or current_tile == "m":
                     continue  # Skip mutation for forbidden tiles
                 # 20% chance to change a block types
-                elif (current_tile == "B" or current_tile == "M" or current_tile == "?") and random.random() < 0.2:
+                elif ((current_tile == "B" or current_tile == "M" or current_tile == "?") and
+                    random.random() < 0.2 * mutation_rate):
                     genome[y][x] = random.choices(["B", "?", "M"], weights=[0.7, 0.2, 0.1])[0]
-                # 1% chance to add a coin or enemy above a blocks
-                elif current_tile == "-" and random.random() < 0.03:
+                # 3% chance to add a coin or enemy above a blocks
+                elif current_tile == "-" and random.random() < 0.03 * mutation_rate:
                     if y + 1 < height and (genome[y + 1][x] == "B" or genome[y + 1][x] == "X"):
                         genome[y][x] = random.choices(["o", "E"], weights=[0.7, 0.3])[0]
                 # 1% chance to remove a coin or enemy
-                elif (current_tile == "o" or current_tile == "E") and random.random() < 0.01:
+                elif (current_tile == "o" or current_tile == "E") and random.random() < 0.01 * mutation_rate:
                     genome[y][x] = "-"
                 # 1% chance to mutate an empty space above height 4 and empty space 2 tiles below to a breakable block
                 elif (current_tile == "-" and
-                    random.random() < (0.01 - (0.01 * (height - y) / height)) and 
+                    random.random() < (0.01 - (0.01 * (height - y) / height)) * mutation_rate and 
                     height - y > 4 and
                     all(genome[dy][x] == "-" for dy in range(y+1, y+2)) and
                     all(genome[dy][x+1] == "-" for dy in range(y+1, y+2)) and
@@ -96,7 +98,7 @@ class Individual_Grid(object):
                     genome[y][x] = "B"
 
                 elif (current_tile == "-" and
-                    random.random() < 0.01 and 
+                    random.random() < 0.01 * mutation_rate and 
                     (genome[y][x+1] == "B" or genome[y][x-1] == "B") and
                     all(genome[dy][x] == "-" for dy in range(y+1, y+2)) and
                     all(genome[dy][x+1] == "-" for dy in range(y+1, y+2)) and
@@ -104,13 +106,13 @@ class Individual_Grid(object):
 
                     genome[y][x] = "B"
                 # 1% chance (increasing to 5% with height) to mutate an remove breakable block
-                if current_tile == "B" and random.random() < (0.01 + (0.04 * (height - y) / height)):
+                if current_tile == "B" and random.random() < (0.01 + (0.04 * (height - y) / height)) * mutation_rate:
                     genome[y][x] = "-"
 
-                # 1% chance to change X to empty space if there is nothing above
-                elif current_tile == "X" and genome[y - 1][x] == "-" and random.random() < 0.02:
+                # 2% chance to change X to empty space if there is nothing above
+                elif current_tile == "X" and genome[y - 1][x] == "-" and random.random() < 0.02 * mutation_rate:
                     genome[y][x] = "-"
-                    if (random.random() < 0.25 and
+                    if (random.random() < 0.25 * mutation_rate and
                         genome[y][x-1] == "X" and
                         genome[y][x+1] == "X" and
                         x-1 > 0 and
@@ -132,16 +134,17 @@ class Individual_Grid(object):
                 # STUDENT Which one should you take?  Self, or other?  Why?
                 # STUDENT consider putting more constraints on this to prevent pipes in the air, etc
                 threshold = 5
+                pipeMax = 10
 
                 # 5% chance to add a pipe
                 if height - y < threshold and random.random() < 0.05:
-                    # take highest fitness pipe
+                    # take highest fitness pipe or 20% chance to take lower fitness a pipe
                     if (self.genome[y][x] == "T" and
-                        self.fitness() < other.fitness() and
+                        (self.fitness() < other.fitness() or random.random() < 0.20) and
                         all(new_genome[dy][x] == "-" for dy in range(y+2, height - 1)) and
                         all(new_genome[dy][x + 1] == "-" for dy in range(y+2, height - 1)) and
                         all(new_genome[dy][x - 1] == "-" for dy in range(y+2, height - 1)) and
-                        sum(row.count("T") for row in new_genome) < 10):
+                        sum(row.count("T") for row in new_genome) < pipeMax):
 
                         # add whole pipe
                         new_genome[y][x] = "T"
@@ -154,7 +157,7 @@ class Individual_Grid(object):
                         all(new_genome[dy][x] == "-" for dy in range(y+2, height - 1)) and
                         all(new_genome[dy][x + 1] == "-" for dy in range(y+2, height - 1)) and
                         all(new_genome[dy][x - 1] == "-" for dy in range(y+2, height - 1)) and
-                        sum(row.count("T") for row in new_genome) < 10):
+                        sum(row.count("T") for row in new_genome) < pipeMax):
 
                         # add whole pipe
                         new_genome[y][x] = "T"
@@ -288,82 +291,57 @@ class Individual_DE(object):
             x = de[0]
             de_type = de[1]
             choice = random.random()
-
-            # Mutating blocks (breakable and question blocks)
             if de_type == "4_block":
                 y = de[2]
                 breakable = de[3]
-                if choice < 0.3: #orginal 0.33
+                if choice < 0.33:
                     x = offset_by_upto(x, width / 8, min=1, max=width - 2)
-                elif choice < 0.6: #orginal 0.6
-                    y = offset_by_upto(y, 2, min=5, max=height - 6)
+                elif choice < 0.66:
+                    y = offset_by_upto(y, height / 2, min=0, max=height - 1)
                 else:
-                    breakable = not breakable
-                # Ensure"X" blocks are only at ground level or part of stairs 
-                if random.random() < 0.5:
-                    x += random.choice([-1, 1])
-
+                    breakable = not de[3]
                 new_de = (x, de_type, y, breakable)
-
-            # Mutating question mark blocks (power-ups)    
             elif de_type == "5_qblock":
                 y = de[2]
                 has_powerup = de[3]  # boolean
-                if choice < 0.4:
+                if choice < 0.33:
                     x = offset_by_upto(x, width / 8, min=1, max=width - 2)
-                elif choice < 0.7:
-                    y = offset_by_upto(y, height / 5, min=2, max=height - 6)
+                elif choice < 0.66:
+                    y = offset_by_upto(y, height / 2, min=0, max=height - 1)
                 else:
-                    has_powerup = not has_powerup
+                    has_powerup = not de[3]
                 new_de = (x, de_type, y, has_powerup)
-            
-            # Mutating coins (ensuring they don’t go underground)
             elif de_type == "3_coin":
                 y = de[2]
                 if choice < 0.5:
                     x = offset_by_upto(x, width / 8, min=1, max=width - 2)
                 else:
-                    y = offset_by_upto(y, height / 2, min=2, max=height - 3)
+                    y = offset_by_upto(y, height / 2, min=0, max=height - 1)
                 new_de = (x, de_type, y)
-
-            # Mutating pipes (keeping them on the ground)    
             elif de_type == "7_pipe":
                 h = de[2]
                 if choice < 0.5:
                     x = offset_by_upto(x, width / 8, min=1, max=width - 2)
                 else:
-                    h = offset_by_upto(h, 1, min=2, max=4) # Keep pipes at reasonable height
-
+                    h = offset_by_upto(h, 2, min=2, max=height - 4)
                 new_de = (x, de_type, h)
-
-            # Mutating holes (gaps in the ground)        
             elif de_type == "0_hole":
                 w = de[2]
                 if choice < 0.5:
-                    x = offset_by_upto(x, width / 3, min=1, max=width - 2)
+                    x = offset_by_upto(x, width / 8, min=1, max=width - 2)
                 else:
-                    w = offset_by_upto(w, 1, min=1, max=3)
-
-                #Ensure gap don't clusters too much
-                if random.random() < 0.5:
-                    x += random.choice([-3,3])#offset holes slightly
-                
+                    w = offset_by_upto(w, 4, min=1, max=width - 2)
                 new_de = (x, de_type, w)
-
-             # Mutating stairs (adjust height, but limit extreme cases)
             elif de_type == "6_stairs":
                 h = de[2]
-                dx = de[3]   # Direction (-1 for left, +1 for right)
-
-                if choice < 0.3:
+                dx = de[3]  # -1 or 1
+                if choice < 0.33:
                     x = offset_by_upto(x, width / 8, min=1, max=width - 2)
-                elif choice < 0.6:
-                    h = offset_by_upto(h, 3, min=3, max=height - 4)
+                elif choice < 0.66:
+                    h = offset_by_upto(h, 8, min=1, max=height - 4)
                 else:
                     dx = -dx
                 new_de = (x, de_type, h, dx)
-
-            # Mutating platforms (ensuring they remain useful)    
             elif de_type == "1_platform":
                 w = de[2]
                 y = de[3]
@@ -371,23 +349,20 @@ class Individual_DE(object):
                 if choice < 0.25:
                     x = offset_by_upto(x, width / 8, min=1, max=width - 2)
                 elif choice < 0.5:
-                    w = offset_by_upto(w, 8, min=2, max=width // 6)
+                    w = offset_by_upto(w, 8, min=1, max=width - 2)
                 elif choice < 0.75:
-                    y = offset_by_upto(y, height / 3, min=3, max=height - 4)
+                    y = offset_by_upto(y, height, min=0, max=height - 1)
                 else:
                     madeof = random.choice(["?", "X", "B"])
                 new_de = (x, de_type, w, y, madeof)
             elif de_type == "2_enemy":
-                x = offset_by_upto(x, width / 8, min=1, max=width - 2)
-                new_de = (x, de_type)
+                pass
             new_genome.pop(to_change)
             heapq.heappush(new_genome, new_de)
         return new_genome
 
     def generate_children(self, other):
         # STUDENT How does this work?  Explain it in your writeup.
-        if len(self.genome) == 0 or len(other.genome) == 0:
-            return (Individual_DE.random_individual(),)  # Replace empty individuals
         pa = random.randint(0, len(self.genome) - 1)
         pb = random.randint(0, len(other.genome) - 1)
         a_part = self.genome[:pa] if len(self.genome) > 0 else []
@@ -452,42 +427,28 @@ class Individual_DE(object):
 
     @classmethod
     def random_individual(_cls):
-        elt_count = random.randint(20, 60)
-        g = []
-
-    
-        for _ in range(elt_count):
-            element = random.choice([
-                (random.randint(1, width - 2), "0_hole", random.randint(1, 3)),
-                (random.randint(1, width - 2), "1_platform", random.randint(2, 6), random.randint(0, height - 4), random.choice(["?", "X", "B"])),
-                (random.randint(1, width - 2), "2_enemy"),
-                (random.randint(1, width - 2), "3_coin", random.randint(4, height - 4)),
-                (random.randint(1, width - 2), "4_block", random.randint(4, height - 5), True),
-                (random.randint(1, width - 2), "5_qblock", random.randint(4, height - 5), random.choice([True, False])),
-                (random.randint(1, width - 2), "6_stairs", random.randint(3, 6), random.choice([-1, 1])), 
-                (random.randint(1, width - 2), "7_pipe", random.randint(1, 4))  # Keep pipe height in check
-            ])
-
-            g.append(element)
- 
-
-    
+        # STUDENT Maybe enhance this
+        elt_count = random.randint(8, 128)
+        g = [random.choice([
+            (random.randint(1, width - 2), "0_hole", random.randint(1, 8)),
+            (random.randint(1, width - 2), "1_platform", random.randint(1, 8), random.randint(0, height - 1), random.choice(["?", "X", "B"])),
+            (random.randint(1, width - 2), "2_enemy"),
+            (random.randint(1, width - 2), "3_coin", random.randint(0, height - 1)),
+            (random.randint(1, width - 2), "4_block", random.randint(0, height - 1), random.choice([True, False])),
+            (random.randint(1, width - 2), "5_qblock", random.randint(0, height - 1), random.choice([True, False])),
+            (random.randint(1, width - 2), "6_stairs", random.randint(1, height - 4), random.choice([-1, 1])),
+            (random.randint(1, width - 2), "7_pipe", random.randint(2, height - 4))
+        ]) for i in range(elt_count)]
         return Individual_DE(g)
 
 
-Individual = Individual_DE
+Individual = Individual_Grid
 
 
 def generate_successors(population):
     results = []
     # STUDENT Design and implement this
     # Hint: Call generate_children() on some individuals and fill up results.
-    # Filter out individuals with empty genomes
-    valid_population = [ind for ind in population if len(ind.genome) > 0]
-
-    # If too few valid individuals, regenerate some random ones
-    while len(valid_population) < len(population) // 2:
-        valid_population.append(Individual_DE.random_individual())
 
     # Generate children from the top individuals
     num_parents = len(population) // 2
