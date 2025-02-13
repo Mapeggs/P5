@@ -213,7 +213,7 @@ class Individual_Grid(object):
     @classmethod
     def random_individual(cls):
         # STUDENT consider putting more constraints on this to prevent pipes in the air, etc
-        # STUDENT also consider weighting the different tile types so it's not uniformly random
+        # STUDENT also consider weighting the different tile types so it's not 
         g = [random.choices(options, k=width) for row in range(height)]
         g[15][:] = ["X"] * width
         g[14][0] = "m"
