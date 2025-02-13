@@ -288,57 +288,82 @@ class Individual_DE(object):
             x = de[0]
             de_type = de[1]
             choice = random.random()
+
+            # Mutating blocks (breakable and question blocks)
             if de_type == "4_block":
                 y = de[2]
                 breakable = de[3]
-                if choice < 0.33:
+                if choice < 0.3: #orginal 0.33
                     x = offset_by_upto(x, width / 8, min=1, max=width - 2)
-                elif choice < 0.66:
-                    y = offset_by_upto(y, height / 2, min=0, max=height - 1)
+                elif choice < 0.6: #orginal 0.6
+                    y = offset_by_upto(y, 2, min=5, max=height - 6)
                 else:
-                    breakable = not de[3]
+                    breakable = not breakable
+                # Ensure"X" blocks are only at ground level or part of stairs 
+                if random.random() < 0.5:
+                    x += random.choice([-1, 1])
+
                 new_de = (x, de_type, y, breakable)
+
+            # Mutating question mark blocks (power-ups)    
             elif de_type == "5_qblock":
                 y = de[2]
                 has_powerup = de[3]  # boolean
-                if choice < 0.33:
+                if choice < 0.4:
                     x = offset_by_upto(x, width / 8, min=1, max=width - 2)
-                elif choice < 0.66:
-                    y = offset_by_upto(y, height / 2, min=0, max=height - 1)
+                elif choice < 0.7:
+                    y = offset_by_upto(y, height / 5, min=2, max=height - 6)
                 else:
-                    has_powerup = not de[3]
+                    has_powerup = not has_powerup
                 new_de = (x, de_type, y, has_powerup)
+            
+            # Mutating coins (ensuring they don’t go underground)
             elif de_type == "3_coin":
                 y = de[2]
                 if choice < 0.5:
                     x = offset_by_upto(x, width / 8, min=1, max=width - 2)
                 else:
-                    y = offset_by_upto(y, height / 2, min=0, max=height - 1)
+                    y = offset_by_upto(y, height / 2, min=2, max=height - 3)
                 new_de = (x, de_type, y)
+
+            # Mutating pipes (keeping them on the ground)    
             elif de_type == "7_pipe":
                 h = de[2]
                 if choice < 0.5:
                     x = offset_by_upto(x, width / 8, min=1, max=width - 2)
                 else:
-                    h = offset_by_upto(h, 2, min=2, max=height - 4)
+                    h = offset_by_upto(h, 1, min=2, max=4) # Keep pipes at reasonable height
+
                 new_de = (x, de_type, h)
+
+            # Mutating holes (gaps in the ground)        
             elif de_type == "0_hole":
                 w = de[2]
                 if choice < 0.5:
-                    x = offset_by_upto(x, width / 8, min=1, max=width - 2)
+                    x = offset_by_upto(x, width / 3, min=1, max=width - 2)
                 else:
-                    w = offset_by_upto(w, 4, min=1, max=width - 2)
+                    w = offset_by_upto(w, 1, min=1, max=3)
+
+                #Ensure gap don't clusters too much
+                if random.random() < 0.5:
+                    x += random.choice([-3,3])#offset holes slightly
+                
                 new_de = (x, de_type, w)
+
+             # Mutating stairs (adjust height, but limit extreme cases)
             elif de_type == "6_stairs":
                 h = de[2]
-                dx = de[3]  # -1 or 1
-                if choice < 0.33:
+                dx = de[3]   # Direction (-1 for left, +1 for right)
+
+                if choice < 0.3:
                     x = offset_by_upto(x, width / 8, min=1, max=width - 2)
-                elif choice < 0.66:
-                    h = offset_by_upto(h, 8, min=1, max=height - 4)
+                elif choice < 0.6:
+                    h = offset_by_upto(h, 3, min=3, max=height - 4)
                 else:
                     dx = -dx
                 new_de = (x, de_type, h, dx)
+
+            # Mutating platforms (ensuring they remain useful)    
             elif de_type == "1_platform":
                 w = de[2]
                 y = de[3]
@@ -346,20 +371,23 @@ class Individual_DE(object):
                 if choice < 0.25:
                     x = offset_by_upto(x, width / 8, min=1, max=width - 2)
                 elif choice < 0.5:
-                    w = offset_by_upto(w, 8, min=1, max=width - 2)
+                    w = offset_by_upto(w, 8, min=2, max=width // 6)
                 elif choice < 0.75:
-                    y = offset_by_upto(y, height, min=0, max=height - 1)
+                    y = offset_by_upto(y, height / 3, min=3, max=height - 4)
                 else:
                     madeof = random.choice(["?", "X", "B"])
                 new_de = (x, de_type, w, y, madeof)
             elif de_type == "2_enemy":
-                pass
+                x = offset_by_upto(x, width / 8, min=1, max=width - 2)
+                new_de = (x, de_type)
             new_genome.pop(to_change)
             heapq.heappush(new_genome, new_de)
         return new_genome
 
     def generate_children(self, other):
         # STUDENT How does this work?  Explain it in your writeup.
+        if len(self.genome) == 0 or len(other.genome) == 0:
+            return (Individual_DE.random_individual(),)  # Replace empty individuals
         pa = random.randint(0, len(self.genome) - 1)
         pb = random.randint(0, len(other.genome) - 1)
         a_part = self.genome[:pa] if len(self.genome) > 0 else []
@@ -424,28 +452,42 @@ class Individual_DE(object):
 
     @classmethod
     def random_individual(_cls):
-        # STUDENT Maybe enhance this
-        elt_count = random.randint(8, 128)
-        g = [random.choice([
-            (random.randint(1, width - 2), "0_hole", random.randint(1, 8)),
-            (random.randint(1, width - 2), "1_platform", random.randint(1, 8), random.randint(0, height - 1), random.choice(["?", "X", "B"])),
-            (random.randint(1, width - 2), "2_enemy"),
-            (random.randint(1, width - 2), "3_coin", random.randint(0, height - 1)),
-            (random.randint(1, width - 2), "4_block", random.randint(0, height - 1), random.choice([True, False])),
-            (random.randint(1, width - 2), "5_qblock", random.randint(0, height - 1), random.choice([True, False])),
-            (random.randint(1, width - 2), "6_stairs", random.randint(1, height - 4), random.choice([-1, 1])),
-            (random.randint(1, width - 2), "7_pipe", random.randint(2, height - 4))
-        ]) for i in range(elt_count)]
+        elt_count = random.randint(20, 60)
+        g = []
+
+    
+        for _ in range(elt_count):
+            element = random.choice([
+                (random.randint(1, width - 2), "0_hole", random.randint(1, 3)),
+                (random.randint(1, width - 2), "1_platform", random.randint(2, 6), random.randint(0, height - 4), random.choice(["?", "X", "B"])),
+                (random.randint(1, width - 2), "2_enemy"),
+                (random.randint(1, width - 2), "3_coin", random.randint(4, height - 4)),
+                (random.randint(1, width - 2), "4_block", random.randint(4, height - 5), True),
+                (random.randint(1, width - 2), "5_qblock", random.randint(4, height - 5), random.choice([True, False])),
+                (random.randint(1, width - 2), "6_stairs", random.randint(3, 6), random.choice([-1, 1])), 
+                (random.randint(1, width - 2), "7_pipe", random.randint(1, 4))  # Keep pipe height in check
+            ])
+
+            g.append(element)
+ 
+
+    
         return Individual_DE(g)
 
 
-Individual = Individual_Grid
+Individual = Individual_DE
 
 
 def generate_successors(population):
     results = []
     # STUDENT Design and implement this
     # Hint: Call generate_children() on some individuals and fill up results.
+    # Filter out individuals with empty genomes
+    valid_population = [ind for ind in population if len(ind.genome) > 0]
+
+    # If too few valid individuals, regenerate some random ones
+    while len(valid_population) < len(population) // 2:
+        valid_population.append(Individual_DE.random_individual())
 
     # Generate children from the top individuals
     num_parents = len(population) // 2
